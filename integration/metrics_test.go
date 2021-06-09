@@ -16,7 +16,6 @@ package integration
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"strconv"
 	"testing"
@@ -104,39 +103,22 @@ func testMetricDbSizeDefrag(t *testing.T, name string) {
 		t.Fatal(kerr)
 	}
 
-	validateAfterCompactionInUse := func() error {
-		// Put to move PendingPages to FreePages
-		if _, err = kvc.Put(context.TODO(), putreq); err != nil {
-			t.Fatal(err)
-		}
-		time.Sleep(500 * time.Millisecond)
-
-		afterCompactionInUse, err := clus.Members[0].Metric("etcd_mvcc_db_total_size_in_use_in_bytes")
-		if err != nil {
-			t.Fatal(err)
-		}
-		aciu, err := strconv.Atoi(afterCompactionInUse)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if biu <= aciu {
-			return fmt.Errorf("expected less than %d, got %d after compaction", biu, aciu)
-		}
-		return nil
+	// Put to move PendingPages to FreePages
+	if _, err = kvc.Put(context.TODO(), putreq); err != nil {
+		t.Fatal(err)
 	}
+	time.Sleep(500 * time.Millisecond)
 
-	// backend rollbacks read transaction asynchronously (PR #10523),
-	// which causes the result to be flaky. Retry 3 times.
-	maxRetry, retry := 3, 0
-	for {
-		err := validateAfterCompactionInUse()
-		if err == nil {
-			break
-		}
-		retry++
-		if retry >= maxRetry {
-			t.Fatalf(err.Error())
-		}
+	afterCompactionInUse, err := clus.Members[0].Metric("etcd_mvcc_db_total_size_in_use_in_bytes")
+	if err != nil {
+		t.Fatal(err)
+	}
+	aciu, err := strconv.Atoi(afterCompactionInUse)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if biu <= aciu {
+		t.Fatalf("expected less than %d, got %d after compaction", biu, aciu)
 	}
 
 	// defrag should give freed space back to fs
